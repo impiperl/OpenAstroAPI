@@ -1,0 +1,9 @@
+spring:
+  app:
+    security:
+      secret-key: ${ASTRO_API_SECRET_KEY}
+      token-expiration: ${ASTRO_API_TOKEN_EXPIRATION:3600}
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
