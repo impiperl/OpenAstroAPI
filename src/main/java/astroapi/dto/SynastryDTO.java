@@ -12,6 +12,9 @@ public class SynastryDTO {
 
     private String compatibilityLevel;
     private List<AspectDTO> aspects;
+    private String requestedHouseSystem;
+    private List<String> effectiveHouseSystems;
+    private boolean houseSystemFallback;
     /**
      * Retrieves the compatibility level between the two partners.
      *
@@ -37,4 +40,10 @@ public class SynastryDTO {
     public void setAspects(List<AspectDTO> aspects) {
         this.aspects = aspects;
     }
+    public String getRequestedHouseSystem() { return requestedHouseSystem; }
+    public void setRequestedHouseSystem(String value) { this.requestedHouseSystem = value; }
+    public List<String> getEffectiveHouseSystems() { return effectiveHouseSystems; }
+    public void setEffectiveHouseSystems(List<String> value) { this.effectiveHouseSystems = value; }
+    public boolean isHouseSystemFallback() { return houseSystemFallback; }
+    public void setHouseSystemFallback(boolean value) { this.houseSystemFallback = value; }
 }

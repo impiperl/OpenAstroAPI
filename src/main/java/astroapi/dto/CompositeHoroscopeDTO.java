@@ -21,6 +21,15 @@ public class CompositeHoroscopeDTO {
     private String ascendantInterpretation;              // Interpretation of the Ascendant
     private String mediumCoeliInterpretation;            // Interpretation of the Medium Coeli
     private List<AspectDTO> aspects;  // List of aspects
+    private String requestedHouseSystem;
+    private String effectiveHouseSystem;
+    private boolean houseSystemFallback;
+    public String getRequestedHouseSystem() { return requestedHouseSystem; }
+    public void setRequestedHouseSystem(String value) { this.requestedHouseSystem = value; }
+    public String getEffectiveHouseSystem() { return effectiveHouseSystem; }
+    public void setEffectiveHouseSystem(String value) { this.effectiveHouseSystem = value; }
+    public boolean isHouseSystemFallback() { return houseSystemFallback; }
+    public void setHouseSystemFallback(boolean value) { this.houseSystemFallback = value; }
     /**
      * Retrieves the planetary positions in the composite horoscope.
      *

@@ -35,6 +35,82 @@ public class SwissEphemerisHelper {
         epheExecutor.shutdown();
     }
 
+    /**
+     * Finsternis-Typmaske „beliebig".
+     *
+     * <p>Sieht nach einer Kleinigkeit aus, ist aber ein Fallstrick mit Messwert: übergibt man
+     * {@code swe_sol_eclipse_when_glob} eine <b>explizite</b> Typmaske
+     * ({@code SE_ECL_TOTAL | SE_ECL_ANNULAR | SE_ECL_PARTIAL | SE_ECL_ANNULAR_TOTAL}), läuft die
+     * Suche in diesem Java-Port nicht in die nächste Finsternis, sondern vorwärts bis an die obere
+     * Ephemeridengrenze — <b>33 Sekunden</b> und am Ende ein Fehler. Mit {@code 0} („beliebiger
+     * Typ", die Bibliothek ergänzt die Maske selbst) dauert derselbe Aufruf 4,6 Millisekunden und
+     * liefert das richtige Ergebnis. Nicht ändern, ohne die Laufzeit erneut zu messen.
+     */
+    private static final int ANY_ECLIPSE_TYPE = 0;
+
+    /**
+     * Führt eine zusammenhängende Ephemeridenauswertung in <b>einer</b> Executor-Task aus.
+     *
+     * <p>Für die Event-Erkennung ist das der entscheidende Unterschied: ein Range-Scan wertet den
+     * Zeitraum tausendfach aus. Ginge jede Einzelauswertung über {@code runWithTimeout}, käme auf
+     * jede Mikrosekunde Rechnung ein Thread-Wechsel. Stattdessen bekommt der Aufrufer hier einen
+     * {@link EphemerisPort} auf die {@code SwissEph}-Instanz des Worker-Threads und behält ihn für
+     * den gesamten Durchlauf.
+     *
+     * <p>Der Port darf die Task <b>nicht</b> überleben — außerhalb ist die zugehörige
+     * {@code SwissEph}-Instanz einem fremden Thread zugeordnet.
+     */
+    public <T> T withEphemeris(java.util.function.Function<EphemerisPort, T> work, long timeoutSeconds) {
+        try {
+            return epheExecutor.runWithTimeout(() -> {
+                SwissEph eph = swe();
+                EphemerisPort port = new EphemerisPort() {
+                    @Override
+                    public double[] lonSpeed(double julianDay, int planetId) {
+                        double[] xx = new double[6];
+                        StringBuffer serr = new StringBuffer();
+                        int flags = SweConst.SEFLG_SWIEPH | SweConst.SEFLG_SPEED;
+                        int ret = eph.swe_calc_ut(julianDay, planetId, flags, xx, serr);
+                        if (ret == SweConst.ERR) {
+                            logger.warn("swe_calc_ut failed for planetId={} at jd={}: {}", planetId, julianDay, serr);
+                            return new double[]{Double.NaN, Double.NaN};
+                        }
+                        return new double[]{xx[0], xx[3]};
+                    }
+
+                    @Override
+                    public double[] nextLunarEclipse(double julianDayStart) {
+                        double[] tret = new double[10];
+                        StringBuffer serr = new StringBuffer();
+                        int ret = eph.swe_lun_eclipse_when(julianDayStart, SweConst.SEFLG_SWIEPH,
+                                ANY_ECLIPSE_TYPE, tret, 0, serr);
+                        if (ret == SweConst.ERR) {
+                            logger.warn("swe_lun_eclipse_when failed at jd={}: {}", julianDayStart, serr);
+                            return null;
+                        }
+                        return new double[]{tret[0], ret};
+                    }
+
+                    @Override
+                    public double[] nextSolarEclipse(double julianDayStart) {
+                        double[] tret = new double[10];
+                        StringBuffer serr = new StringBuffer();
+                        int ret = eph.swe_sol_eclipse_when_glob(julianDayStart, SweConst.SEFLG_SWIEPH,
+                                ANY_ECLIPSE_TYPE, tret, 0, serr);
+                        if (ret == SweConst.ERR) {
+                            logger.warn("swe_sol_eclipse_when_glob failed at jd={}: {}", julianDayStart, serr);
+                            return null;
+                        }
+                        return new double[]{tret[0], ret};
+                    }
+                };
+                return work.apply(new MemoizingEphemerisPort(port));
+            }, timeoutSeconds, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            throw new RuntimeException("Swiss Ephemeris range scan timed out after " + timeoutSeconds + "s", e);
+        }
+    }
+
     // Planets change ~1°/day max (except Moon ~13°/day). Rounding to the nearest minute
     // is precise enough for all use-cases and gives a high hit-rate for transit noon requests.
     private final Cache<Long, Map<String, Double>> planetCache;
@@ -260,7 +336,15 @@ public class SwissEphemerisHelper {
                     double[] ascmc = new double[10];
                     HouseDataDTO houseData = new HouseDataDTO();
 
-                    int ret = swe().swe_houses(julianDay, SweConst.SEFLG_SWIEPH, latitude, longitude, houseSystem.getCode(), cuspDegrees, ascmc);
+                    char requested = houseSystem.getCode();
+                    char effective = requested;
+                    int ret = swe().swe_houses(julianDay, SweConst.SEFLG_SWIEPH, latitude, longitude, requested, cuspDegrees, ascmc);
+                    // Placidus/Koch are undefined close to the poles. Make Swiss Ephemeris'
+                    // documented Porphyry fallback explicit and observable to callers.
+                    if (ret == SweConst.ERR && (requested == 'P' || requested == 'K')) {
+                        effective = 'O';
+                        ret = swe().swe_houses(julianDay, SweConst.SEFLG_SWIEPH, latitude, longitude, effective, cuspDegrees, ascmc);
+                    }
                     if (ret == SweConst.ERR) {
                         throw new IllegalArgumentException("Error calculating house cusps.");
                     }
@@ -272,6 +356,9 @@ public class SwissEphemerisHelper {
                     houseData.setCusps(cusps);
                     houseData.setAscendant(ascmc[0]);
                     houseData.setMediumCoeli(ascmc[1]);
+                    houseData.setRequestedHouseSystem(String.valueOf(requested));
+                    houseData.setEffectiveHouseSystem(String.valueOf(effective));
+                    houseData.setHouseSystemFallback(requested != effective);
 
                     return houseData;
                 }, 3, TimeUnit.SECONDS);
@@ -523,6 +610,9 @@ public class SwissEphemerisHelper {
         compositeHoroscope.setCusps(compositeHouseData.getCusps());
         compositeHoroscope.setAscendant(compositeHouseData.getAscendant());
         compositeHoroscope.setMediumCoeli(compositeHouseData.getMediumCoeli());
+        compositeHoroscope.setRequestedHouseSystem(compositeHouseData.getRequestedHouseSystem());
+        compositeHoroscope.setEffectiveHouseSystem(compositeHouseData.getEffectiveHouseSystem());
+        compositeHoroscope.setHouseSystemFallback(compositeHouseData.isHouseSystemFallback());
         compositeHoroscope.setAscendantInterpretation(AstrologyUtils.interpretDegree(compositeHouseData.getAscendant()));
         compositeHoroscope.setMediumCoeliInterpretation(AstrologyUtils.interpretDegree(compositeHouseData.getMediumCoeli()));
         compositeHoroscope.setAspects(calculateTransits(horoscopeOne, horoscopeTwo));
@@ -603,6 +693,18 @@ public class SwissEphemerisHelper {
             throw new RuntimeException("Composite house calculation timed out.", e);
         }
 
+        char effectiveHouseSystemCode = houseSystemCode;
+        if (ret == SweConst.ERR && (houseSystemCode == 'P' || houseSystemCode == 'K')) {
+            effectiveHouseSystemCode = 'O';
+            final char fallbackCode = effectiveHouseSystemCode;
+            try {
+                ret = epheExecutor.runWithTimeout(() -> swe().swe_houses(julianDay,
+                        SweConst.SEFLG_SWIEPH, latitude, longitude, fallbackCode, cuspDegrees, ascmc),
+                        3, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                throw new RuntimeException("Composite fallback house calculation timed out.", e);
+            }
+        }
         if (ret == SweConst.ERR) {
             throw new IllegalArgumentException("Error calculating composite houses: " + ret);
         }
@@ -617,6 +719,9 @@ public class SwissEphemerisHelper {
         HouseDataDTO houseData = new HouseDataDTO();
         houseData.setCusps(cusps);
         houseData.setAscendant(ascmc[0]);
+        houseData.setRequestedHouseSystem(String.valueOf(houseSystemCode));
+        houseData.setEffectiveHouseSystem(String.valueOf(effectiveHouseSystemCode));
+        houseData.setHouseSystemFallback(houseSystemCode != effectiveHouseSystemCode);
         houseData.setMediumCoeli(ascmc[1]);
 
         return houseData;
@@ -978,6 +1083,9 @@ public class SwissEphemerisHelper {
         dto.setCusps(houseData.getCusps());
         dto.setAscendant(houseData.getAscendant());
         dto.setMediumCoeli(houseData.getMediumCoeli());
+        dto.setRequestedHouseSystem(houseData.getRequestedHouseSystem());
+        dto.setEffectiveHouseSystem(houseData.getEffectiveHouseSystem());
+        dto.setHouseSystemFallback(houseData.isHouseSystemFallback());
         dto.setAscendantInterpretation(AstrologyUtils.interpretDegree(houseData.getAscendant()));
         dto.setMediumCoeliInterpretation(AstrologyUtils.interpretDegree(houseData.getMediumCoeli()));
         dto.setCoordinates(new double[]{latitude, longitude});
@@ -1006,6 +1114,8 @@ public class SwissEphemerisHelper {
         // Defensive Kopie: base.getPlanets() kann direkt aus dem Caffeine-Cache stammen. Diese Map
         // niemals mutieren, sonst überschreibt man den gecachten echten Sonnenstand.
         Map<String, Double> basePlanets = new HashMap<>(base.getPlanets());
+        Map<String, Boolean> retrogradePlanets = getRetrogradeStatuses(dateTime);
+        String lunarPhase = getLunarPhase(dateTime);
 
         for (ZodiacSign sign : ZodiacSign.values()) {
             // Sonne auf 15° des aktuellen Zeichens
@@ -1025,6 +1135,8 @@ public class SwissEphemerisHelper {
             reduced.setAspects(aspects);
             reduced.setCusps(base.getCusps());
             reduced.setPlanets(planets);
+            reduced.setRetrogradePlanets(retrogradePlanets);
+            reduced.setLunarPhase(lunarPhase);
             results.add(reduced);
         }
         return results;

@@ -20,6 +20,11 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Object> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    }
+
     /**
      * The Swiss Ephemeris worker pool shed load (bounded queue stayed full past
      * the wait window). Signal the client to retry rather than failing as a 500.

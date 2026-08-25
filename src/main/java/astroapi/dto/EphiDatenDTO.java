@@ -25,11 +25,20 @@ public class EphiDatenDTO {
 
     private double julianDate; // Julian Date of the planetary positions
     private double[] coordinates; // location coordinates
+    private String requestedHouseSystem;
+    private String effectiveHouseSystem;
+    private boolean houseSystemFallback;
     /**
      * Default constructor.
      */
     public EphiDatenDTO() {
     }
+    public String getRequestedHouseSystem() { return requestedHouseSystem; }
+    public void setRequestedHouseSystem(String value) { this.requestedHouseSystem = value; }
+    public String getEffectiveHouseSystem() { return effectiveHouseSystem; }
+    public void setEffectiveHouseSystem(String value) { this.effectiveHouseSystem = value; }
+    public boolean isHouseSystemFallback() { return houseSystemFallback; }
+    public void setHouseSystemFallback(boolean value) { this.houseSystemFallback = value; }
 
     /**
      * Constructor with initial planetary positions and house cusps.

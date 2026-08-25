@@ -145,6 +145,9 @@ public class AstroService {
 
             CompatibilityResult result = compatibilityAnalyzer.analyzeCompatibility(partnerOne, partnerTwo);
             synastryDTO.setCompatibilityLevel(result.getCompatibilityLevel());
+            synastryDTO.setRequestedHouseSystem(partnerOne.getRequestedHouseSystem());
+            synastryDTO.setEffectiveHouseSystems(List.of(partnerOne.getEffectiveHouseSystem(), partnerTwo.getEffectiveHouseSystem()));
+            synastryDTO.setHouseSystemFallback(partnerOne.isHouseSystemFallback() || partnerTwo.isHouseSystemFallback());
 
             return synastryDTO;
         }
@@ -215,6 +218,9 @@ public class AstroService {
         dailyHoroscopeDTO.setTransitHouseCusps(transitChart.getCuspsAsMap());
         dailyHoroscopeDTO.setTransitAscendant(transitChart.getAscendant());
         dailyHoroscopeDTO.setTransitMidheaven(transitChart.getMediumCoeli());
+        dailyHoroscopeDTO.setRequestedHouseSystem(transitChart.getRequestedHouseSystem());
+        dailyHoroscopeDTO.setEffectiveHouseSystem(transitChart.getEffectiveHouseSystem());
+        dailyHoroscopeDTO.setHouseSystemFallback(transitChart.isHouseSystemFallback());
 
         List<AspectDTO> aspects = swissEphemerisHelper.calculateTransits(natalChart, transitChart);
         AstroUtils.filterTransitAspects(aspects); // transit-specific orbs (not the wide general ones)
@@ -247,6 +253,9 @@ public class AstroService {
         dto.setTransitHouseCusps(transitChart.getCuspsAsMap());
         dto.setTransitAscendant(transitChart.getAscendant());
         dto.setTransitMidheaven(transitChart.getMediumCoeli());
+        dto.setRequestedHouseSystem(transitChart.getRequestedHouseSystem());
+        dto.setEffectiveHouseSystem(transitChart.getEffectiveHouseSystem());
+        dto.setHouseSystemFallback(transitChart.isHouseSystemFallback());
 
         List<AspectDTO> aspects = swissEphemerisHelper.calculateTransits(natalChart, transitChart);
         AstroUtils.filterTransitAspects(aspects); // transit-specific orbs (not the wide general ones)

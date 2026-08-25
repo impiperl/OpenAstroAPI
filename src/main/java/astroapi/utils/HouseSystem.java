@@ -9,13 +9,12 @@ public enum HouseSystem {
     CAMPANUS('C'),
     REGIOMONTANUS('R'),
     PORPHYRY('O'),
-    EQUAL_HOUSES('E'),
+    EQUAL_HOUSES('A'),
     TOPOCENTRIC('T'),
-    WHOLE_SIGN_HOUSES('G'),
-    ALCABITUS('A'),
+    ALCABITIUS('B'),
     MERIDIAN('M'),
     DOMICAL('D'),
-    WHOLE_TROPICAL_HOUSES('W');
+    WHOLE_SIGN_HOUSES('W');
 
     private final char code;
 
@@ -45,11 +44,12 @@ public enum HouseSystem {
      * @throws IllegalArgumentException If no HouseSystem matches the provided code.
      */
     public static HouseSystem fromCode(char code) {
+        if (code == '\0') return PLACIDUS; // backwards compatibility for older internal clients
         for (HouseSystem hs : HouseSystem.values()) {
             if (hs.code == code) {
                 return hs;
             }
         }
-        return PLACIDUS; // Default option if no match is found
+        throw new IllegalArgumentException("Unsupported house system code: " + code);
     }
 }

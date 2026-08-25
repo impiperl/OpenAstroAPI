@@ -31,6 +31,9 @@ public class DailyHoroscopeDTO {
 
     // Metadata
     private String calculationSettings;
+    private String requestedHouseSystem;
+    private String effectiveHouseSystem;
+    private boolean houseSystemFallback;
 
     // Getters and Setters
 
@@ -147,6 +150,12 @@ public class DailyHoroscopeDTO {
     public String getCalculationSettings() {
         return calculationSettings;
     }
+    public String getRequestedHouseSystem() { return requestedHouseSystem; }
+    public void setRequestedHouseSystem(String value) { this.requestedHouseSystem = value; }
+    public String getEffectiveHouseSystem() { return effectiveHouseSystem; }
+    public void setEffectiveHouseSystem(String value) { this.effectiveHouseSystem = value; }
+    public boolean isHouseSystemFallback() { return houseSystemFallback; }
+    public void setHouseSystemFallback(boolean value) { this.houseSystemFallback = value; }
 
     public void setCalculationSettings(String calculationSettings) {
         this.calculationSettings = calculationSettings;

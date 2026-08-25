@@ -10,6 +10,8 @@ public class ZodiacHoroscopeDTO {
     private String ascendant;
     private List<AspectDTO> aspects;
     private List<Double> cusps;
+    private Map<String, Boolean> retrogradePlanets;
+    private String lunarPhase;
 
     // Getter & Setter
     public String getZodiacSign() {
@@ -51,5 +53,21 @@ public class ZodiacHoroscopeDTO {
 
     public void setPlanets(Map<String, Double> planets) {
         this.planets = planets;
+    }
+
+    public Map<String, Boolean> getRetrogradePlanets() {
+        return retrogradePlanets;
+    }
+
+    public void setRetrogradePlanets(Map<String, Boolean> retrogradePlanets) {
+        this.retrogradePlanets = retrogradePlanets;
+    }
+
+    public String getLunarPhase() {
+        return lunarPhase;
+    }
+
+    public void setLunarPhase(String lunarPhase) {
+        this.lunarPhase = lunarPhase;
     }
 }
