@@ -2,6 +2,7 @@ package astroapi.service.events;
 
 import astroapi.dto.AstroEventRawDTO;
 import astroapi.utils.AngleMath;
+import astroapi.utils.Bodies;
 import astroapi.utils.CrossingScan;
 import astroapi.utils.EphemerisPort;
 import astroapi.utils.EventKeys;
@@ -11,8 +12,11 @@ import astroapi.utils.Planet;
 import astroapi.utils.ZodiacSign;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Exakte Transite laufender Körper zu den Punkten eines Radix — die persönliche Ebene.
@@ -26,13 +30,19 @@ import java.util.Map;
 public class TransitDetector implements EventDetector {
 
     /**
+     * Die Mondknoten laufen nicht als Transitkörper mit: ihre Bewegung ist eine Rechengröße der
+     * Mondbahn, kein eigener Körper am Himmel, und ein „Transit des mittleren Knotens" wäre für
+     * den Feed eine leere Karte.
+     */
+    private static final Set<Planet> NOT_TRANSITING = EnumSet.of(Planet.TRUE_NODE, Planet.MEAN_NODE);
+
+    /**
      * Hier <b>mit</b> Mond: zum Radix ist der Mondtransit die kurzlebige, aber sehr konkrete
      * Tagesinformation, die den persönlichen Feed trägt.
      */
-    private static final Planet[] TRANSITING = {
-            Planet.MOON, Planet.SUN, Planet.MERCURY, Planet.VENUS, Planet.MARS, Planet.JUPITER,
-            Planet.SATURN, Planet.URANUS, Planet.NEPTUNE, Planet.PLUTO, Planet.CHIRON
-    };
+    private static List<Planet> transiting(EventScanContext ctx) {
+        return ctx.bodies().stream().filter(body -> !NOT_TRANSITING.contains(body)).collect(Collectors.toList());
+    }
 
     private static final double MOON_STEP_DAYS = 0.25;
     private static final double DEFAULT_STEP_DAYS = 0.5;
@@ -51,9 +61,11 @@ public class TransitDetector implements EventDetector {
         EphemerisPort eph = ctx.ephemeris();
         NatalChart natal = new NatalChart(ctx.natalChart());
 
-        for (Planet body : TRANSITING) {
+        for (Planet body : transiting(ctx)) {
             int id = body.getSweConstValue();
-            double step = body == Planet.MOON ? MOON_STEP_DAYS : DEFAULT_STEP_DAYS;
+            double step = body == Planet.MOON
+                    ? MOON_STEP_DAYS
+                    : Bodies.scanStepDays(body, DEFAULT_STEP_DAYS);
 
             for (Map.Entry<String, Double> point : natal.points().entrySet()) {
                 String pointName = point.getKey();
@@ -61,6 +73,11 @@ public class TransitDetector implements EventDetector {
                 if (natalLongitude == null || Double.isNaN(natalLongitude)) continue;
 
                 for (MajorAspect aspect : MajorAspect.values()) {
+                    // Ein exakter Durchgang hat per Definition Orb 0 — entschieden wird hier also
+                    // allein über die Paarung und die Aspektart.
+                    if (!Bodies.aspectAllowed(body.getName(), pointName, aspect.getDisplayName(), 0.0)) {
+                        continue;
+                    }
                     for (double target : aspect.signedTargets()) {
                         List<Double> exactTimes = CrossingScan.scan(
                                 jd -> AngleMath.signedDelta(eph.lon(jd, id) - natalLongitude, target),

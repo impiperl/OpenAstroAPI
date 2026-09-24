@@ -4,6 +4,18 @@ import swisseph.SweConst;
 
 /**
  * Represents the planets used in astrology, each associated with a Swiss Ephemeris constant and a name.
+ *
+ * <p>Alle hier gelisteten Körper stehen in den Ephemeridendateien, die im Image liegen: die
+ * Planeten in {@code sepl_*}, Mond und Mondapogäum in {@code semo_*}, Chiron, Pholus, Ceres,
+ * Pallas, Juno und Vesta in der Asteroiden-Sammeldatei {@code seas_*}.
+ *
+ * <p><b>Weitere Asteroiden</b> (Eris, Sedna, Hygiea, Psyche, Eros, Chariklo, Nessus …) sprechen
+ * über {@code SweConst.SE_AST_OFFSET + Nummer} an, brauchen aber je eine eigene Datei
+ * ({@code se00433.se1} usw.) im Verzeichnis {@code ephe/}. Solange die fehlt, liefert
+ * {@code swe_calc_ut} nur einen Fehler — deshalb steht hier keiner von ihnen.
+ *
+ * <p>Welche dieser Körper tatsächlich in eine Berechnung eingehen, entscheidet nicht diese
+ * Aufzählung, sondern {@link Bodies}.
  */
 public enum Planet {
     // Klassische Planeten
@@ -21,22 +33,24 @@ public enum Planet {
     PLUTO(SweConst.SE_PLUTO, "Pluto"),
 
     // Lilith (Schwarzer Mond)
-    // TRUE_LILITH(SweConst.SE_OSCU_APOG, "True Lilith"),
-    // MEAN_LILITH(SweConst.SE_MEAN_APOG, "Mean Lilith"),
+    // Nur das MITTLERE Apogäum. Das oszillierende (SE_OSCU_APOG) schwankt um mehrere Grad hin und
+    // zurück; im Transit-Scan erzeugt jede dieser Schwingungen echte Nulldurchgänge und damit
+    // Ereignisse, die nichts bedeuten.
+    MEAN_LILITH(SweConst.SE_MEAN_APOG, "Mean Lilith"),
 
     // Mondknoten
     TRUE_NODE(SweConst.SE_TRUE_NODE, "True Node"),
     MEAN_NODE(SweConst.SE_MEAN_NODE, "Mean Node"),
 
     // Zentauren
-    CHIRON(SweConst.SE_CHIRON, "Chiron");
-    // PHOLUS(SweConst.SE_PHOLUS, "Pholus"),
+    CHIRON(SweConst.SE_CHIRON, "Chiron"),
+    PHOLUS(SweConst.SE_PHOLUS, "Pholus"),
 
     // Hauptasteroiden
-    // CERES(SweConst.SE_CERES, "Ceres"),
-    // PALLAS(SweConst.SE_PALLAS, "Pallas"),
-    // JUNO(SweConst.SE_JUNO, "Juno"),
-    // VESTA(SweConst.SE_VESTA, "Vesta");
+    CERES(SweConst.SE_CERES, "Ceres"),
+    PALLAS(SweConst.SE_PALLAS, "Pallas"),
+    JUNO(SweConst.SE_JUNO, "Juno"),
+    VESTA(SweConst.SE_VESTA, "Vesta");
 
     // Fiktive Planeten (Hamburger Schule)
     // CUPIDO(SweConst.SE_CUPIDO, "Cupido"),

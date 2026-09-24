@@ -15,6 +15,10 @@ RUN mvn install:install-file -Dfile=/tmp/swisseph-2.00.00-01.jar \
 # Kopieren des restlichen Quellcodes
 COPY src ./src
 
+# Die Regressionstests berechnen reale Referenz-Charts und benötigen bereits
+# während des Maven-Builds die Swiss-Ephemeris-Dateien (u. a. Chiron).
+COPY ephe/ ./ephe/
+
 # Bauen der Anwendung
 RUN mvn clean package
 

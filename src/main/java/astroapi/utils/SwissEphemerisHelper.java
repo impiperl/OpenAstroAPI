@@ -4,6 +4,7 @@ import astroapi.dto.*;
 import astroapi.service.SwissEphemerisExecutor;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import swisseph.*;
 import org.slf4j.Logger;
@@ -19,6 +20,28 @@ import java.util.concurrent.TimeoutException;
 public class SwissEphemerisHelper {
     private static final Logger logger = LoggerFactory.getLogger(SwissEphemerisHelper.class);
     private SwissEphemerisExecutor epheExecutor;
+
+    /**
+     * Schalter für die erweiterten Körper (Asteroiden, Pholus, Lilith) — siehe {@link Bodies}.
+     *
+     * <p>Vorgabe <b>an</b> — aber das heißt nicht, dass jemand die Asteroiden zu sehen bekommt:
+     * Ob sie in einer Antwort auftauchen, entscheidet gAIster anhand der Einstellung der Nutzerin
+     * (Vorgabe dort: aus). Gerechnet wird trotzdem immer, sonst könnte ein Umschalten nur für
+     * künftige Horoskope gelten — gespeicherte Charts werden nicht neu berechnet.
+     *
+     * <p>Dieser Schalter ist damit der Not-Aus, nicht die Bedienung.
+     *
+     * <p>Der Vorgabewert steht auch am Feld, nicht nur im Platzhalter: in Unit-Tests wird diese
+     * Klasse direkt instanziiert, ohne dass Spring die Annotation auswertet. Ohne den Wert am Feld
+     * liefe genau dort ein anderer Körpersatz als im Betrieb.
+     */
+    @Value("${astro.bodies.extended:true}")
+    private boolean extendedBodies = true;
+
+    /** Die Körper, die in eine Chartberechnung eingehen. */
+    private List<Planet> chartBodies() {
+        return Bodies.forChart(extendedBodies);
+    }
 
     /**
      * The Swiss Ephemeris instance owned by the current worker thread.
@@ -295,7 +318,7 @@ public class SwissEphemerisHelper {
                     double[] result = new double[6];
                     StringBuffer errorBuffer = new StringBuffer();
 
-                    for (Planet planet : Planet.values()) {
+                    for (Planet planet : chartBodies()) {
                         int planetId = planet.getSweConstValue();
                         int returnCode = swe().swe_calc_ut(julianDay, planetId, SweConst.SEFLG_SWIEPH, result, errorBuffer);
                         if (returnCode == SweConst.ERR) {
@@ -751,6 +774,13 @@ public class SwissEphemerisHelper {
 
                 AspectType aspectType = getAspectType(angle);
                 if (aspectType != null) {
+                    double orb = Math.abs(angle - aspectType.getExactDegree());
+                    // Erweiterte Körper nur unter den engen Regeln aus Bodies — sonst stünde in
+                    // jeder Tagesliste dauerhaft „Vesta Trigon Neptun".
+                    if (!Bodies.aspectAllowed(natalPlanet, transitPlanet,
+                            aspectType.getDescription(), orb)) {
+                        continue;
+                    }
                     AspectDTO aspectDTO = new AspectDTO();
                     aspectDTO.setNatalPlanet(natalPlanet);
                     aspectDTO.setTransitPlanet(transitPlanet);
@@ -797,7 +827,7 @@ public class SwissEphemerisHelper {
                     StringBuffer errorBuffer = new StringBuffer();
                     double[] position = new double[6];
 
-                    for (Planet planet : Planet.values()) {
+                    for (Planet planet : chartBodies()) {
                         int planetId = planet.getSweConstValue();
                         int result = swe().swe_calc_ut(julianDay, planetId, flags, position, errorBuffer);
                         if (result != SweConst.ERR) {
@@ -853,7 +883,7 @@ public class SwissEphemerisHelper {
         try {
             return epheExecutor.runWithTimeout(() -> {
                 Map<Planet, Double> planetPositions = new HashMap<>();
-                for (Planet planet : Planet.values()) {
+                for (Planet planet : chartBodies()) {
                     double[] xpos = new double[6];
                     int ret = swe().swe_calc_ut(julianDay, planet.getSweConstValue(), flags, xpos, null);
                     if (ret == SweConst.OK) {
@@ -888,6 +918,10 @@ public class SwissEphemerisHelper {
                 double angle = calculateAspectAngle(pos1, pos2);
                 AspectType aspectType = getAspectType(angle);
                 if (aspectType != null) {
+                    double orb = Math.abs(angle - aspectType.getExactDegree());
+                    if (!Bodies.aspectAllowed(planet1, planet2, aspectType.getDescription(), orb)) {
+                        continue;
+                    }
                     AspectDTO aspectDTO = new AspectDTO();
                     aspectDTO.setNatalPlanet(planet1);
                     aspectDTO.setTransitPlanet(planet2);

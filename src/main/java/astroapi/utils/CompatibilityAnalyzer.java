@@ -35,13 +35,15 @@ public class CompatibilityAnalyzer {
     public CompatibilityResult analyzeCompatibility(EphiDatenDTO partnerOne, EphiDatenDTO partnerTwo) {
         CompatibilityResult result = new CompatibilityResult();
 
-        // Iterate through each planet in the first partner's chart
-        for (Planet planetOne : Planet.values()) {
+        // Bewusst der klassische Körpersatz: die Partnerbewertung zählt harmonische gegen
+        // spannungsreiche Aspekte. Nähme man die erweiterten Körper dazu, verschöben sich alle
+        // bisher vergebenen Werte, ohne dass die Bewertung dadurch besser würde.
+        for (Planet planetOne : Bodies.CLASSIC) {
             Double degreeOne = partnerOne.getPlanets().get(planetOne.getName());
             if (degreeOne == null) continue; // Ensure the planet is present
 
             // Iterate through each planet in the second partner's chart
-            for (Planet planetTwo : Planet.values()) {
+            for (Planet planetTwo : Bodies.CLASSIC) {
                 Double degreeTwo = partnerTwo.getPlanets().get(planetTwo.getName());
                 if (degreeTwo == null) continue; // Ensure the planet is present
 

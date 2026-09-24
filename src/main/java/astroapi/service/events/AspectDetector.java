@@ -2,6 +2,7 @@ package astroapi.service.events;
 
 import astroapi.dto.AstroEventRawDTO;
 import astroapi.utils.AngleMath;
+import astroapi.utils.Bodies;
 import astroapi.utils.CrossingScan;
 import astroapi.utils.EphemerisPort;
 import astroapi.utils.EventKeys;
@@ -11,7 +12,10 @@ import astroapi.utils.Planet;
 import astroapi.utils.ZodiacSign;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Exakte Hauptaspekte zwischen zwei laufenden Körpern — die kollektive Wetterlage.
@@ -23,10 +27,12 @@ import java.util.List;
  */
 public class AspectDetector implements EventDetector {
 
-    private static final Planet[] BODIES = {
-            Planet.SUN, Planet.MERCURY, Planet.VENUS, Planet.MARS, Planet.JUPITER,
-            Planet.SATURN, Planet.URANUS, Planet.NEPTUNE, Planet.PLUTO, Planet.CHIRON
-    };
+    /** Mond und Mondknoten bleiben draußen — siehe Klassenkommentar. */
+    private static final Set<Planet> EXCLUDED = EnumSet.of(Planet.MOON, Planet.TRUE_NODE, Planet.MEAN_NODE);
+
+    private static List<Planet> bodies(EventScanContext ctx) {
+        return ctx.bodies().stream().filter(body -> !EXCLUDED.contains(body)).collect(Collectors.toList());
+    }
 
     /**
      * Die schnellste hier vorkommende Relativbewegung ist Merkur gegen einen langsamen Planeten mit
@@ -47,13 +53,24 @@ public class AspectDetector implements EventDetector {
         List<AstroEventRawDTO> events = new ArrayList<>();
         EphemerisPort eph = ctx.ephemeris();
 
-        for (int i = 0; i < BODIES.length; i++) {
-            for (int j = i + 1; j < BODIES.length; j++) {
-                Planet a = BODIES[i];
-                Planet b = BODIES[j];
+        List<Planet> bodies = bodies(ctx);
+        for (int i = 0; i < bodies.size(); i++) {
+            for (int j = i + 1; j < bodies.size(); j++) {
+                Planet a = bodies.get(i);
+                Planet b = bodies.get(j);
 
                 for (MajorAspect aspect : MajorAspect.values()) {
+                    // Ein erweiterter Körper darf kollektiv nur einen persönlichen Planeten
+                    // berühren; Ceres gegen Neptun stünde monatelang und wäre keine Nachricht.
+                    if (!Bodies.aspectAllowed(a.getName(), b.getName(), aspect.getDisplayName(), 0.0)) {
+                        continue;
+                    }
                     for (double target : aspect.signedTargets()) {
+                        // Die Rasterweite richtet sich nach dem SCHNELLEREN der beiden: er
+                        // bestimmt, wie rasch sich der Winkel ändert. Zwei erweiterte Körper
+                        // kommen hier ohnehin nicht vor, die Paarung ist also stets Planet
+                        // gegen Planet oder Planet gegen Asteroid — und damit bleibt es beim
+                        // halben Tag.
                         List<Double> exactTimes = CrossingScan.scan(
                                 jd -> AngleMath.signedDelta(
                                         eph.lon(jd, a.getSweConstValue()) - eph.lon(jd, b.getSweConstValue()),

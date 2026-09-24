@@ -7,3 +7,14 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
+# Erweiterte Körper (Ceres, Pallas, Juno, Vesta, Pholus, Lilith) in allen Berechnungen.
+#
+# Vorgabe AN: Die Körper werden mitgerechnet und erscheinen in Charts, Aspekten und Ereignissen.
+# false stellt den klassischen Satz her (Sonne bis Pluto, Mondknoten, Chiron). Der Wert wird beim
+# Start gelesen.
+#
+# Aspekte mit diesen Körpern sind eng gefiltert — nur zu persönlichen Punkten, nur Hauptaspekte,
+# Orb 1° (Konjunktion 1,5°), kein Asteroid gegen Asteroid. Siehe astroapi.utils.Bodies.
+astro:
+  bodies:
+    extended: ${ASTRO_BODIES_EXTENDED:true}

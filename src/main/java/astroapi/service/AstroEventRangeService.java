@@ -13,12 +13,14 @@ import astroapi.service.events.MoonPhaseDetector;
 import astroapi.service.events.SolarPointDetector;
 import astroapi.service.events.StationDetector;
 import astroapi.service.events.TransitDetector;
+import astroapi.utils.Bodies;
 import astroapi.utils.JulianTime;
 import astroapi.utils.ScanCancelledException;
 import astroapi.utils.SwissEphemerisHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -70,6 +72,14 @@ public class AstroEventRangeService {
     private final SwissEphemerisHelper swissEphemerisHelper;
     private final List<EventDetector> detectors;
 
+    /**
+     * Schalter für die erweiterten Körper — siehe {@link Bodies}. Vorgabe aus; wie im
+     * {@code SwissEphemerisHelper} steht der Wert auch am Feld, damit Tests ohne Spring-Kontext
+     * denselben Satz sehen wie der Betrieb.
+     */
+    @Value("${astro.bodies.extended:true}")
+    private boolean extendedBodies = true;
+
     @Autowired
     public AstroEventRangeService(SwissEphemerisHelper swissEphemerisHelper) {
         this(swissEphemerisHelper, DEFAULT_DETECTORS);
@@ -92,7 +102,8 @@ public class AstroEventRangeService {
 
         long startedAt = System.currentTimeMillis();
         List<AstroEventRawDTO> events = swissEphemerisHelper.withEphemeris(port -> {
-            EventScanContext context = new EventScanContext(port, jdFrom, jdTo, request.getNatalChart());
+            EventScanContext context = new EventScanContext(port, jdFrom, jdTo, request.getNatalChart(),
+                    Bodies.forChart(extendedBodies));
             List<AstroEventRawDTO> collected = new ArrayList<>();
 
             for (EventDetector detector : detectors) {

@@ -12,7 +12,10 @@ import java.util.Set;
 
 public class AstroUtils {
 
-    // Definiere relevante Transit-Planeten für Tageshoroskope
+    // Definiere relevante Transit-Planeten für Tageshoroskope.
+    // Bewusst ohne die erweiterten Körper (Asteroiden, Pholus, Lilith): die Phasenanalyse deutet
+    // längere Abschnitte aus wenigen tragenden Transiten. Ein Asteroid gehört dort nicht hinein —
+    // er erscheint im Tages- und Ereignisbild, wo er nah an einem persönlichen Punkt steht.
     private static final Set<String> RELEVANT_TRANSIT_PLANETS = new HashSet<>(Arrays.asList(
             "Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"
     ));
@@ -36,7 +39,16 @@ public class AstroUtils {
             Map.entry("Pluto", 2.0),
             Map.entry("Chiron", 1.5),
             Map.entry("True Node", 1.5),
-            Map.entry("Mean Node", 1.5)
+            Map.entry("Mean Node", 1.5),
+            // Erweiterte Körper: dieselbe enge Grenze, die Bodies beim Erzeugen anlegt. Doppelt
+            // gemoppelt, aber die Werte stehen hier beieinander — wer die Transitorben pflegt,
+            // soll nicht in einer zweiten Klasse nachsehen müssen.
+            Map.entry("Ceres", 1.0),
+            Map.entry("Pallas", 1.0),
+            Map.entry("Juno", 1.0),
+            Map.entry("Vesta", 1.0),
+            Map.entry("Pholus", 1.0),
+            Map.entry("Mean Lilith", 1.0)
     );
     private static final double DEFAULT_TRANSIT_ORB = 1.5;
 
@@ -81,10 +93,24 @@ public class AstroUtils {
         Iterator<AspectDTO> iterator = aspects.iterator();
         while (iterator.hasNext()) {
             AspectDTO aspect = iterator.next();
-            if (aspect.getOrb() > maxOrb ||
-                    !RELEVANT_TRANSIT_PLANETS.contains(aspect.getTransitPlanet())) {
+            if (aspect.getOrb() > maxOrb || !isRelevant(aspect)) {
                 iterator.remove();
             }
         }
+    }
+
+    /**
+     * Die Whitelist prüft nur den <b>zweiten</b> Körper eines Aspekts. Für die klassischen Paare
+     * ist das gewachsen und bleibt so. Für die erweiterten Körper wäre es ein Zufallsgenerator:
+     * ob „Ceres Konjunktion Sonne" oder „Sonne Konjunktion Ceres" im DTO steht, entscheidet die
+     * Reihenfolge der Positionskarte, nicht die Astrologie — derselbe Aspekt bliebe einmal stehen
+     * und verschwände einmal. Sie sind ohnehin schon durch {@link Bodies} gegangen, das deutlich
+     * strenger filtert als diese Liste.
+     */
+    private static boolean isRelevant(AspectDTO aspect) {
+        if (Bodies.isExtended(aspect.getTransitPlanet()) || Bodies.isExtended(aspect.getNatalPlanet())) {
+            return true;
+        }
+        return RELEVANT_TRANSIT_PLANETS.contains(aspect.getTransitPlanet());
     }
 }
