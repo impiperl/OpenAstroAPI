@@ -25,7 +25,28 @@ public class SwissEphemerisExecutor {
     private final ThreadLocal<SwissEph> localEph;
 
     public SwissEphemerisExecutor(String ephePath) {
-        int threads = Math.max(2, Runtime.getRuntime().availableProcessors());
+        this(ephePath, Math.max(2, Runtime.getRuntime().availableProcessors()), null);
+    }
+
+    /**
+     * Pool mit eigener Größe und einem Initialisierer, der <b>einmal je Worker-Thread</b> auf der
+     * frisch gebauten {@link SwissEph}-Instanz läuft.
+     *
+     * <p>Genau dafür ist der Initialisierer da: die siderische Betriebsart
+     * ({@code swe_set_sid_mode}) ist Zustand <i>der Instanz</i> ({@code swed.sidd.sid_mode}). Wer
+     * siderisch rechnen will, braucht deshalb einen eigenen Instanzpool — sonst trüge dieselbe
+     * {@code SwissEph}, die gleich darauf eine tropische Radix rechnet, eine gesetzte
+     * Ayanamsha mit sich. Mit einem zweiten Pool ist eine Vermischung technisch unmöglich statt
+     * nur unwahrscheinlich.
+     *
+     * @param ephePath    Verzeichnis der Ephemeridendateien
+     * @param threads     Poolgröße = Höchstzahl gleichzeitiger {@code SwissEph}-Instanzen
+     * @param initializer läuft je Thread genau einmal, direkt nach {@code new SwissEph(...)};
+     *                    {@code null} für keine Initialisierung
+     */
+    public SwissEphemerisExecutor(String ephePath, int threads,
+                                  java.util.function.Consumer<SwissEph> initializer) {
+        threads = Math.max(1, threads);
         // Bounded task queue so a burst of requests can't grow the backlog (and
         // heap) without limit. When the queue is full the submitting (request)
         // thread blocks until a slot frees up — natural backpressure instead of
@@ -37,7 +58,11 @@ public class SwissEphemerisExecutor {
                 new ArrayBlockingQueue<>(queueCapacity),
                 new BoundedWaitPolicy(OFFER_TIMEOUT_MS));
         // Each worker thread lazily builds (and then reuses) its own SwissEph.
-        this.localEph = ThreadLocal.withInitial(() -> new SwissEph(ephePath));
+        this.localEph = ThreadLocal.withInitial(() -> {
+            SwissEph eph = new SwissEph(ephePath);
+            if (initializer != null) initializer.accept(eph);
+            return eph;
+        });
     }
 
     /** How long a submitting thread waits for a free queue slot before the
