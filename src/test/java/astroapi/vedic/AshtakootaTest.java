@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -65,7 +66,7 @@ class AshtakootaTest {
         AshtakootaOrientationDTO r = calc(chartIn("A", Rashi.MESHA), chartIn("B", Rashi.MESHA));
         assertEquals(8, r.getKootas().size());
         assertEquals(AshtakootaCalculator.KOOTA_ORDER,
-                r.getKootas().stream().map(KootaScoreDTO::getKey).toList());
+                r.getKootas().stream().map(KootaScoreDTO::getKey).collect(Collectors.toList()));
 
         Map<String, Double> maxima = Map.of(
                 "varna", 1.0, "vashya", 2.0, "dina", 3.0, "yoni", 4.0,

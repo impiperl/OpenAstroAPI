@@ -26,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -400,7 +401,7 @@ class VedicEphemerisIntegrationTest {
                 Ayanamsa.LAHIRI, NodeType.MEAN);
         var factors = MarriageFactors.build(chart).getFactors();
 
-        List<String> keys = factors.stream().map(f -> f.getKey()).toList();
+        List<String> keys = factors.stream().map(f -> f.getKey()).collect(Collectors.toList());
         assertEquals(List.of("venus", "jupiter", "mars", "moon"), keys,
                 "Die drei achsengebundenen Faktoren müssen fehlen, nicht geraten sein");
         for (var factor : factors) {
@@ -450,7 +451,8 @@ class VedicEphemerisIntegrationTest {
         VedicChartDTO chart = vedic.chartOf(vienna(), Ayanamsa.LAHIRI, NodeType.MEAN);
         assertEquals(9, chart.getPlanets().size());
         assertEquals(9, chart.getNavamsaPlanets().size());
-        List<String> keys = chart.getPlanets().stream().map(VedicPlanetDTO::getBody).toList();
+        List<String> keys = chart.getPlanets().stream().map(VedicPlanetDTO::getBody)
+                .collect(Collectors.toList());
         assertEquals(List.of("sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn",
                 "rahu", "ketu"), keys);
         for (String forbidden : List.of("uranus", "neptune", "pluto", "chiron", "lilith",
@@ -578,7 +580,8 @@ class VedicEphemerisIntegrationTest {
         request.setPersonB(mumbai());
         VedicMarriageResponseDTO r = marriage.analyse(request);
 
-        List<String> codes = r.getWarnings().stream().map(VedicWarningDTO::getCode).toList();
+        List<String> codes = r.getWarnings().stream().map(VedicWarningDTO::getCode)
+                .collect(Collectors.toList());
         assertTrue(codes.contains("birth_time_unknown"), codes.toString());
         VedicWarningDTO w = r.getWarnings().stream()
                 .filter(x -> "birth_time_unknown".equals(x.getCode())).findFirst().orElseThrow();
@@ -607,7 +610,8 @@ class VedicEphemerisIntegrationTest {
         request.setPersonA(person("A", found, 48.2082, 16.3738, true));
         request.setPersonB(mumbai());
         VedicMarriageResponseDTO r = marriage.analyse(request);
-        List<String> codes = r.getWarnings().stream().map(VedicWarningDTO::getCode).toList();
+        List<String> codes = r.getWarnings().stream().map(VedicWarningDTO::getCode)
+                .collect(Collectors.toList());
         assertTrue(codes.contains("moon_near_nakshatra_boundary"), codes + " für " + found);
         VedicWarningDTO w = r.getWarnings().stream()
                 .filter(x -> "moon_near_nakshatra_boundary".equals(x.getCode())).findFirst().orElseThrow();
@@ -639,7 +643,7 @@ class VedicEphemerisIntegrationTest {
     void marriageFactors() {
         VedicChartDTO chart = vedic.chartOf(vienna(), Ayanamsa.LAHIRI, NodeType.MEAN);
         var factors = MarriageFactors.build(chart).getFactors();
-        List<String> keys = factors.stream().map(f -> f.getKey()).toList();
+        List<String> keys = factors.stream().map(f -> f.getKey()).collect(Collectors.toList());
         assertEquals(List.of("ascendant", "seventh_house", "seventh_lord",
                 "venus", "jupiter", "mars", "moon"), keys);
 

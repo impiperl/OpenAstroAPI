@@ -1,5 +1,8 @@
 # Erster Schritt: Anwendung bauen
-FROM maven:3.6.3-jdk-11 AS builder
+# Maven 3.9 ist Pflicht: 3.6.3 läuft nicht zuverlässig auf einem JDK 21.
+# Das JDK im Builder darf neuer sein als das Compile-Ziel — `maven.compiler.release` in der
+# pom.xml hält die API-Oberfläche trotzdem auf Java 18.
+FROM maven:3.9-eclipse-temurin-21 AS builder
 
 # Arbeitsverzeichnis setzen
 WORKDIR /app
@@ -23,7 +26,8 @@ COPY ephe/ ./ephe/
 RUN mvn clean package
 
 # Zweiter Schritt: Erstellen des Laufzeit-Containers
-FROM openjdk:11-jre-slim
+# Dasselbe Laufzeit-Image wie gAIster. Die `openjdk:*`-Images sind abgekündigt.
+FROM eclipse-temurin:21-jre-jammy
 
 # Arbeitsverzeichnis setzen
 WORKDIR /app

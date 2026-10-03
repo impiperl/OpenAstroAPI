@@ -22,12 +22,44 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.7.1</version>
+        <!--
+            2.7.18 ist die letzte 2.7er-Fassung und genau die, die gAIster in Produktion fährt.
+            Der Sprung von 2.7.1 gehört zum Java-Upgrade: 2.7.1 bringt Spring Framework 5.3.21,
+            2.7.18 bringt 5.3.31 — und erst dort sind die Reflexions- und ASM-Anpassungen für
+            neuere JDKs drin. Mit 2.7.1 auf einer Temurin-21-Laufzeit wäre das Risiko unnötig.
+        -->
+        <version>2.7.18</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
     <properties>
-        <java.version>11</java.version>
+        <!--
+            Compile-Ziel 18, Laufzeit Temurin 21 — dieselbe Paarung wie gAIster, die hier in
+            Produktion läuft. Bewusst NICHT Ziel 21: Spring Boot 2.7 ist offiziell bis Java 19
+            freigegeben, und 18 bleibt innerhalb dieser Zusage. Die JVM führt den Bytecode
+            ohnehin aus — ältere Zielversion auf neuerer Laufzeit ist der übliche, sichere Weg.
+
+            Die Swiss-Ephemeris-Bibliothek gibt hier nichts vor: sie ist Java-8-Bytecode
+            (Class-Version 52) und läuft auf jeder neueren JVM.
+        -->
+        <java.version>18</java.version>
+        <!--
+            Prueft die API-Oberflaeche gegen Java 11, nicht nur die Bytecode-Version.
+
+            Spring Boots Elternpom setzt aus java.version nur `source` und `target`. Die beiden
+            erzeugen Java-11-Bytecode, lassen aber Methoden neuerer JDKs durch: wer lokal mit
+            Java 21 baut, bekommt einen gruenen Build und der Container-Build mit
+            `maven:3.6.3-jdk-11` scheitert. Genau das ist am 03.10.2026 passiert —
+            `Stream.toList()` (Java 16) in sechs Testzeilen, lokal gruen, im Image rot.
+
+            `release` zieht die Standardbibliothek der Zielversion heran. Damit faellt derselbe
+            Fehler lokal auf, mit welchem JDK auch immer gebaut wird.
+
+            Die Zielversion selbst bleibt 11. Sie ist keine Vorgabe der Swiss-Ephemeris-Bibliothek
+            (die ist Java-8-Bytecode und laeuft auf jeder neueren JVM), sondern die Festlegung des
+            Dockerfiles. Eine Anhebung gehoert in einen eigenen Schritt zusammen mit dem Image.
+        -->
+        <maven.compiler.release>${java.version}</maven.compiler.release>
     </properties>
     <dependencies>
         <!-- Spring Boot Starter Web -->
