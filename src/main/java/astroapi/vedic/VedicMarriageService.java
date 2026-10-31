@@ -93,21 +93,7 @@ public class VedicMarriageService {
                                            List<AshtakootaOrientationDTO> orientations) {
         List<VedicWarningDTO> warnings = new ArrayList<>();
         for (VedicChartDTO chart : List.of(chartA, chartB)) {
-            if (!chart.isBirthTimeKnown()) {
-                warnings.add(new VedicWarningDTO("birth_time_unknown", "caution", chart.getLabel(),
-                        Map.of()));
-            }
-            double remaining = chart.getMoonNakshatra().getRemainingDegrees();
-            double entered = chart.getMoonNakshatra().getDegreeInNakshatra();
-            double distance = Math.min(remaining, entered);
-            if (distance <= VedicEphemerisService.NAKSHATRA_BOUNDARY_WARN_DEGREES) {
-                Map<String, Object> args = new LinkedHashMap<>();
-                args.put("degrees", Math.round(distance * 1000.0) / 1000.0);
-                // Der Mond läuft etwa 13,2° am Tag; daraus die Zeitspanne, die den Befund kippt.
-                args.put("approxMinutes", (int) Math.round(distance / 13.2 * 24 * 60));
-                warnings.add(new VedicWarningDTO("moon_near_nakshatra_boundary", "caution",
-                        chart.getLabel(), args));
-            }
+            warnings.addAll(VedicWarnings.forChart(chart));
         }
         if (role == TraditionalRole.BOTH && orientations.size() == 2) {
             double first = orientations.get(0).getTotalPoints();

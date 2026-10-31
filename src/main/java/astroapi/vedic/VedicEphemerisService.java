@@ -66,6 +66,18 @@ public class VedicEphemerisService {
 
     private static final Logger logger = LoggerFactory.getLogger(VedicEphemerisService.class);
 
+    /**
+     * Sonnenaufgang nach hinduistischer Konvention, soweit dieser Port ihn hergibt:
+     * Scheibenmittelpunkt ohne Refraktion.
+     *
+     * <p>Neuere Fassungen von Swiss Ephemeris bündeln das als {@code SE_BIT_HINDU_RISING} und
+     * nehmen zusätzlich {@code SE_BIT_GEOCTR_NO_ECL_LAT} hinzu. Beides fehlt hier — siehe
+     * {@link #lastSunriseBefore}. Die Konstante steht trotzdem benannt da, damit die Absicht an
+     * der Aufrufstelle lesbar ist und ein späterer Bibliotheks-Wechsel genau eine Zeile trifft.
+     */
+    private static final int HINDU_RISING =
+            SweConst.SE_CALC_RISE | SweConst.SE_BIT_DISC_CENTER | SweConst.SE_BIT_NO_REFRACTION;
+
     /** Pflichtgröße des Cusp-Arrays für {@code swe_houses} — siehe Klassendoku. */
     private static final int CUSP_ARRAY_SIZE = 37;
 
@@ -159,6 +171,156 @@ public class VedicEphemerisService {
             if (ret == SweConst.ERR) throw new IllegalStateException("swe_calc_ut failed: " + err);
             return xx[0];
         }, Ayanamsa.LAHIRI);
+    }
+
+    /**
+     * Siderische Längen von Sonne und Mond zu einem Zeitpunkt — die Grundlage des Panchanga.
+     *
+     * <p>Beide aus <b>einem</b> Aufruf-Paar auf derselben Instanz, damit sie garantiert denselben
+     * Ayanamsha-Zustand sehen. Getrennte Aufrufe über den Pool könnten auf verschiedenen
+     * {@link SwissEph}-Instanzen landen; das wäre heute harmlos, weil alle Lahiri tragen, aber
+     * genau die Art stiller Annahme, die beim nächsten Ayanamsha bricht.
+     *
+     * @return {@code [Sonne, Mond]} in Grad
+     */
+    public double[] siderealSunAndMoon(double julianDay, Ayanamsa ayanamsa) {
+        return run(eph -> {
+            double[] sun = new double[6];
+            double[] moon = new double[6];
+            StringBuffer err = new StringBuffer();
+            if (eph.swe_calc_ut(julianDay, SweConst.SE_SUN, CALC_FLAGS, sun, err) == SweConst.ERR) {
+                throw new IllegalStateException("swe_calc_ut (sun) failed: " + err);
+            }
+            if (eph.swe_calc_ut(julianDay, SweConst.SE_MOON, CALC_FLAGS, moon, err) == SweConst.ERR) {
+                throw new IllegalStateException("swe_calc_ut (moon) failed: " + err);
+            }
+            return new double[]{ sun[0], moon[0] };
+        }, ayanamsa);
+    }
+
+    /**
+     * Der letzte Sonnenaufgang vor einem Zeitpunkt — die Grenze des vedischen Tages.
+     *
+     * <p>Der vedische Tag läuft von Sonnenaufgang zu Sonnenaufgang. Wer um 03:00 Uhr fragt, steht
+     * noch im Tag von gestern; der zugehörige Vara ist der von gestern, und daran hängen Rahu Kala
+     * und die Muhurta-Ausschlüsse.
+     *
+     * <h2>Welcher Sonnenaufgang</h2>
+     * Nicht der bürgerliche. Die hinduistische Kalenderrechnung nimmt den <b>Mittelpunkt</b> der
+     * Sonnenscheibe <b>ohne Refraktion</b> — Swiss Ephemeris fasst das in neueren Fassungen als
+     * {@code SE_BIT_HINDU_RISING} zusammen, was zusätzlich eine geozentrische Betrachtung ohne
+     * ekliptikale Breite einschließt. Der bürgerliche Aufgang (oberer Rand, mit Refraktion) liegt
+     * rund drei bis fünf Minuten früher; nahe einer Glied-Grenze ergibt das einen anderen Tithi
+     * oder Vara am Tagesbeginn und verschiebt damit alle daran hängenden Muhurta-Ausschlüsse.
+     *
+     * <p><b>Der hier verwendete Java-Port kennt {@code SE_BIT_HINDU_RISING} nicht.</b> Verfügbar
+     * sind nur {@code SE_BIT_DISC_CENTER} und {@code SE_BIT_NO_REFRACTION}; der dritte Bestandteil
+     * {@code SE_BIT_GEOCTR_NO_ECL_LAT} fehlt. Beide verfügbaren Bits sind gesetzt — das ist die
+     * erreichbare Annäherung, nicht die Konvention selbst. Der verbleibende Unterschied liegt im
+     * Sekundenbereich, ist aber eine bekannte Abweichung und keine Gleichwertigkeit.
+     *
+     * <p>Zweite Falle: {@code geopos} erwartet die Reihenfolge <b>Länge, Breite, Höhe</b> — nicht
+     * Breite zuerst, wie überall sonst in diesem Dienst.
+     *
+     * <p>In Polnähe kann es tagelang keinen Aufgang geben. Dann liefert der Port keinen Treffer,
+     * und dieser Dienst sagt das offen, statt eine Zeit zu erfinden.
+     *
+     * @param searchStartJd Zeitpunkt, von dem aus rückwärts gesucht wird
+     * @param latitude      geografische Breite in Grad
+     * @param longitude     geografische Länge in Grad
+     */
+    /**
+     * Sonnenaufgang mit frei gewähltem Modus — <b>ausschließlich</b> für den Test, der nachweist,
+     * dass beide Bits der hinduistischen Konvention tatsächlich wirken.
+     *
+     * <p>Ein einzelner Vergleich mit dem bürgerlichen Aufgang zeigt nur, dass sich <em>etwas</em>
+     * geändert hat: Auch „oberer Rand ohne Refraktion" läge in derselben Größenordnung. Erst der
+     * Vergleich aller vier Modi untereinander trennt die Wirkung von {@code SE_BIT_DISC_CENTER}
+     * und {@code SE_BIT_NO_REFRACTION} voneinander.
+     *
+     * <p>Im Betrieb gibt es diese Wahl nicht: Dort gilt {@link #HINDU_RISING}, und eine
+     * Umschaltmöglichkeit wäre genau die Art Schalter, die ein Ergebnis unbemerkt verändert.
+     */
+    public java.util.OptionalDouble sunriseForTest(double searchStartJd, double latitude,
+                                                   double longitude, int risingMode) {
+        return run(eph -> {
+            double[] geopos = { longitude, latitude, 0.0 };
+            swisseph.DblObj found = new swisseph.DblObj();
+            StringBuffer err = new StringBuffer();
+            int ret = eph.swe_rise_trans(searchStartJd - 1.0, SweConst.SE_SUN, null,
+                    SweConst.SEFLG_SWIEPH, risingMode, geopos, 0.0, 0.0, found, err);
+            return ret != 0 ? java.util.OptionalDouble.empty()
+                    : java.util.OptionalDouble.of(found.val);
+        }, Ayanamsa.LAHIRI);
+    }
+
+    public java.util.OptionalDouble lastSunriseBefore(double searchStartJd, double latitude,
+                                                      double longitude, Ayanamsa ayanamsa) {
+        return run(eph -> {
+            // Zwei Tage zurück reicht überall außerhalb der Polarkreise mit großem Abstand.
+            double from = searchStartJd - 2.0;
+            double[] geopos = { longitude, latitude, 0.0 };
+            double best = Double.NaN;
+            double cursor = from;
+            while (cursor < searchStartJd) {
+                swisseph.DblObj found = new swisseph.DblObj();
+                StringBuffer err = new StringBuffer();
+                int ret = eph.swe_rise_trans(cursor, SweConst.SE_SUN, null,
+                        SweConst.SEFLG_SWIEPH, HINDU_RISING, geopos, 0.0, 0.0, found, err);
+                if (ret != 0 || found.val <= cursor || found.val > searchStartJd) break;
+                best = found.val;
+                cursor = found.val + 1e-4;   // knapp dahinter weitersuchen, sonst Endlosschleife
+            }
+            return Double.isNaN(best) ? java.util.OptionalDouble.empty()
+                    : java.util.OptionalDouble.of(best);
+        }, ayanamsa);
+    }
+
+    /**
+     * Wann überschreitet ein aus Sonne und Mond gebildeter Winkel die nächste Grenze?
+     *
+     * <p>Das ist die Wechselzeit eines Panchanga-Glieds. Welcher Winkel gemeint ist, bestimmt
+     * {@code angleOf}: Mond − Sonne für Tithi und Karana, Mond + Sonne für Yoga, der Mond allein
+     * für das Nakshatra. Dadurch braucht es nur eine Suchroutine statt vier.
+     *
+     * <h2>Warum der ganze Scan in einem Durchlauf liegt</h2>
+     * Eine Nullstellensuche wertet die Funktion dutzende Male aus. Liefe jede Auswertung über
+     * {@link #run}, wären es ebenso viele Übergaben an den Pool — mit Zeitlimit, Thread-Wechsel
+     * und der Möglichkeit, dabei auf einer anderen {@link SwissEph}-Instanz zu landen. Der Scan
+     * läuft deshalb vollständig auf einem Thread und einer Instanz.
+     *
+     * @param boundaryDegrees der Zielwinkel in Grad
+     * @param maxDays         wie weit vorausgeschaut wird; ein Glied dauert knapp einen Tag
+     * @return der exakte Zeitpunkt, oder leer, wenn im Fenster keiner liegt
+     */
+    public java.util.OptionalDouble nextAngleCrossing(
+            double fromJd, double maxDays,
+            java.util.function.DoubleBinaryOperator angleOf,
+            double boundaryDegrees, Ayanamsa ayanamsa) {
+
+        return run(eph -> {
+            java.util.function.DoubleUnaryOperator distanceToBoundary = jd -> {
+                double[] sun = new double[6];
+                double[] moon = new double[6];
+                StringBuffer err = new StringBuffer();
+                if (eph.swe_calc_ut(jd, SweConst.SE_SUN, CALC_FLAGS, sun, err) == SweConst.ERR
+                        || eph.swe_calc_ut(jd, SweConst.SE_MOON, CALC_FLAGS, moon, err) == SweConst.ERR) {
+                    throw new IllegalStateException("swe_calc_ut failed during crossing scan: " + err);
+                }
+                return astroapi.utils.AngleMath.signedDelta(
+                        angleOf.applyAsDouble(sun[0], moon[0]), boundaryDegrees);
+            };
+
+            // Rasterweite 0,05 Tage (72 min): Die schnellste hier gesuchte Größe ist die Summe
+            // Sonne + Mond mit rund 14°/Tag, also knapp 0,7° je Schritt — weit genug entfernt
+            // davon, eine Grenze zwischen zwei Punkten zu überspringen.
+            // nearLimit 90°: verhindert, dass der Sprung von +180 auf −180 am Gegenpunkt als
+            // Nullstelle gilt.
+            java.util.List<Double> roots = astroapi.utils.CrossingScan.scan(
+                    distanceToBoundary, fromJd, fromJd + maxDays, 0.05, 90.0);
+            return roots.isEmpty() ? java.util.OptionalDouble.empty()
+                    : java.util.OptionalDouble.of(roots.get(0));
+        }, ayanamsa);
     }
 
     public double julianDay(LocalDateTime utDateTime) {

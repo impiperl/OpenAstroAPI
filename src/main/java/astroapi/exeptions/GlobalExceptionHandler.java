@@ -26,6 +26,23 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Kein Sonnenaufgang am gefragten Ort — jenseits der Polarkreise der Normalfall.
+     *
+     * <p>422 statt 500: Die Anfrage war gültig, die Antwort ist nur an diesem Ort nicht
+     * berechenbar. Der Code ist maschinenlesbar, damit eine Oberfläche den Fall benennen kann,
+     * ohne die Meldung zu zerlegen.
+     */
+    @ExceptionHandler(NoSunriseException.class)
+    public ResponseEntity<Object> handleNoSunrise(NoSunriseException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "no_sunrise");
+        body.put("message", ex.getMessage());
+        body.put("latitude", ex.getLatitude());
+        body.put("longitude", ex.getLongitude());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
+    }
+
+    /**
      * The Swiss Ephemeris worker pool shed load (bounded queue stayed full past
      * the wait window). Signal the client to retry rather than failing as a 500.
      */
